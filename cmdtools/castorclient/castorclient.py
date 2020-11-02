@@ -8,7 +8,8 @@ from console_progressbar import ProgressBar
 INTRO = """
 Welcome to the Castor Client!
 ------------------------------
-This tool allows you to analyze Castor study data using its export Excel file.
+This tool allows you to analyze Castor study data using the study's exported Excel file. Before you
+use the Castor client export the latest version of the data to Excel.
 
 Type 'help' to show a short list of commands. To view more details for a given command type
 'help <command>. To show detailed info for all commands type 'help -v'.
