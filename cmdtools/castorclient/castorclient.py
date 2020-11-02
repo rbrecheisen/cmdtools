@@ -2,6 +2,8 @@ import os
 import cmd2
 import pandas as pd
 
+from cmd2 import with_argument_list
+
 from console_progressbar import ProgressBar
 
 
@@ -99,11 +101,8 @@ class CastorClient(object):
         self.results[result_name] = [df, 'Other']
         self.client_shell.poutput('Loading done')
 
-    def show_columns(self, result_name):
-        if result_name == '':
-            df = self.results[self.current_result][0]
-        else:
-            df = self.results[result_name][0]
+    def show_columns(self):
+        df = self.results[self.current_result][0]
         for column in df.columns:
             self.client_shell.poutput('{}:\t{}'.format(column, df[column].dtype))
 
@@ -231,7 +230,22 @@ class CastorClient(object):
         result_name = 'result_{}'.format(self.next_result_idx())
         self.results[result_name] = [result, 'Selected']
         self.current_result = result_name
-        self.client_shell.poutput('Stored results in result set "{}" (now current result)'.format(result_name))
+        self.client_shell.poutput('Stored results in result set {}'.format(result_name))
+
+    def rename_column(self, column, new_name):
+        df = self.results[self.current_result][0]
+        result = df.rename(columns={column: new_name}, inplace=False)
+        result_name = 'result_{}'.format(self.next_result_idx())
+        description = 'Renamed column {} to {}'.format(column, new_name)
+        self.results[result_name] = [result, description]
+        self.current_result = result_name
+        self.client_shell.poutput(description)
+
+    def merge(self, result_name1, result_name2, on_key):
+        result1 = self.results[result_name1][0]
+        result2 = self.results[result_name2][0]
+        new_result = pd.merge(result1, result2, on=on_key)
+        print(new_result.shape)
 
 
 class CastorClientShell(cmd2.Cmd):
@@ -340,12 +354,12 @@ class CastorClientShell(cmd2.Cmd):
 
     # DISPLAYING DATA
 
-    def do_show_columns(self):
+    def do_show_columns(self, _):
         """
         Usage: show_columns
         Show column names and types for current result set.
         """
-        self.client.show_columns(result_name)
+        self.client.show_columns()
 
     def do_show_column_values(self, col_name):
         """
@@ -503,6 +517,27 @@ class CastorClientShell(cmd2.Cmd):
         columns = columns.args
         columns = [x.strip() for x in columns.split(',')]
         self.client.select_columns(columns)
+
+    @with_argument_list()
+    def do_rename_column(self, args):
+        """
+        Usage: rename_column <column> <new_name>
+        Rename column <column> to <new_name>. This can be handy if you want to merge two result sets on a
+        common column like SAP number.
+
+        Note: operation will be performed on current result set.
+        :return:
+        """
+        self.client.rename_column(args[0], args[1])
+
+    @with_argument_list()
+    def do_merge(self, args):
+        """
+        Usage: merge <result 1> <result 2> <column>
+        Perform inner join of result sets <result 1> and <result 2> on column <column>. This obviously assumes that
+        both result sets have a column named <column>.
+        """
+        self.client.merge(args[0], args[1], args[2])
 
 
 if __name__ == '__main__':
