@@ -1,144 +1,20 @@
 import os
 import cmd2
+import pandas as pd
+
+from console_progressbar import ProgressBar
+
 
 INTRO = """
 Welcome to the Castor Client!
 ------------------------------
 This tool allows you to analyze Castor study data using its export Excel file.
 
-Type 'help' to show a short list of commands. To view a more extensive list of commands and their descriptions, 
-type 'cheat_sheet'.
+Type 'help' to show a short list of commands. To view more details for a given command type
+'help <command>. To show detailed info for all commands type 'help -v'.
 """
 
 PROMPT = '(client) '
-
-CHEAT_SHEET = """
-
-General info:
--------------
-The Castor client allows you to analyze Castor export Excel files. To view the full list of commands you
-can apply, type 'cheat_sheet'.
-
-Result sets:
-------------
-The client works on the basis of result sets. When you first load an export Excel file it will 
-be stored as the first (and current) result set. You can perform a number of operations on a result set
-like showing its columns (show_columns command) or showing a field's data type (show_field_type <name>
-command). When you actually change the result set, for example by sorting it, the client tool will create
-a new result set and set that one to be the current result set. For this reason, make sure you know which
-result set you are working on. You can view all result sets using the command show_results. It will display
-each result set's name and a short description. You can change these descriptions to something more memorable
-using the command: 
-
-    set_result_desc <name>=<description>
-
-General:
---------
-- cheat_sheet                       Show this cheat sheet.
-- cd <dir path>                     Change the working directory to <dir path>.
-- pwd                               Print the working (current) directory.
-- shell <shell command>             Run a shell command by preceding it with ! (exclamation mark). For example, to view the
-                                    contents of the $HOME environment variable, type !echo $HOME.
-
-Loading/saving data:
--------------
-- load_castor_export <file path>    Load Castor export Excel file. You can either specify a single file name, in
-                                    which case the file is assumed to be located in the current working directory.
-                                    Or you can specify the full path to the file. 
-
-                                    Note that the Castor client expects the sheets in the Excel file with the 
-                                    following names:
-
-                                        - Study results
-                                        - Study variable list
-                                        - Field options
-
-- load_excel <file path>            Load general Excel file. This can be useful if you need some data that you can use
-                                    as input to one of the analysis commands. For example, you might load a list of
-                                    hospital IDs from one Excel file and use it to extract specific records from 
-                                    the Castor export Excel file.
-
-Displaying data:
-----------------
-- show_columns <result name>
-- show_column_values <name>
-- show_column_options <name>
-- show_column_field_type <name>     Show the variable's field type as specified in the Castor CRF. The following 
-                                    field types can be recognized by the Castor client:
-
-                                        - dropdown
-                                        - radio
-                                        - year
-                                        - string
-                                        - textarea
-                                        - calculation
-                                        - numeric
-                                        - date
-
-Result sets:
-------------
-- show_results                      Show all result sets. For each result set, its name and description is given. Also
-                                    the number of rows and columns is displayed so you can see the effect of filtering
-                                    operations (using the query command) 
-
-- set_current_result <result name>  Set <result name> to be the current result set. Any display or analysis commands
-                                    you run will be applied to the current result set. When you load data for the first
-                                    time it will automatically become the current result set and will be named 'result_0'.
-
-- set_result_desc <name=desc>       Set the description of the result set <name> to <desc>. By default the description
-                                    of a result set will be empty, except for result_0 which will be 'original dataset'.
-                                    Query and sort operations, that generate new result sets, will be have descriptions
-                                    'query' and 'sort' respectively but you are encouraged to change the description to
-                                    something more memorable. Note that the description will be included in the file
-                                    name when you save a result set to file.
-
-                                    Example:
-
-                                        set_result_desc result_0=original dataset with other description
-
-                                    This will set the description of result set 'result_0' to 'original dataset with
-                                    other description'.
-
-- save_result <name>                Save the given result set to file. The file name will have the following format:
-
-                                        <name>_<desc>.xlsx
-
-                                    where <desc> will be the description with spaces replaced by underscores. 
-
-Analysis:
----------
-- query <query string>              Filter the current result set with the given query string. You can build complex 
-                                    query sentences using the 'and' and 'or' operators. You can specify variable values 
-                                    depending on their type. You should place string values between double-quotes. 
-                                    Numeric values can be typed as is. Date values should be placed between double-quotes
-                                    as well. The date string format should conform to 'dd-mm-yyyy'. 
-                                    Use == as the *equals* operator (do not use = which means assignment)
-
-                                    Example query string:
-
-                                        dob < "01-01-1940" and gender == 1
-
-                                    This expression searches for records corresponding to patients born before 
-                                    01-01-1940 and have gender '1' (Male). Note that options are often encoded as numbers, 
-                                    like was done here with gender. You can find out which numbers have been assigned to
-                                    option values by typing (if you're dataset contains this variable and it is an option
-                                    group): 
-
-                                        show_options gender
-
-                                        (0, 'Female')
-                                        (1, 'Male')
-                                        (9, 'Unknown')
-
-                                    This will list the option values for the option group 'dob'. Not only the names of
-                                    these values will be given (male, female, unknown, etc.) but also their numeric code.
-
-                                    The result of the query will be stored in a new result set. This result set will be set to be
-                                    the current result set.
-
-- sort <column names> [--asc=0|1]
-
-"""
 
 
 class CastorClient(object):
@@ -160,8 +36,8 @@ class CastorClient(object):
 
     def lookup_column_type(self, column):
         for idx, row in self.dd.iterrows():
-            if row['Variable name'] == column:
-                field_type = row['Field type']
+            if row['Variable_name'] == column:
+                field_type = row['Field_type']
                 if field_type == 'dropdown' or field_type == 'radio' or field_type == 'year':
                     return field_type, 'Int64'
                 if field_type == 'string' or field_type == 'textarea' or field_type == 'calculation':
@@ -174,6 +50,7 @@ class CastorClient(object):
         return None, None
 
     def load_castor_export(self, excel_file):
+        self.client_shell.poutput('Note: spaces in column names will be replaced with an underscore (_)!')
         self.client_shell.poutput('Loading {}...'.format(excel_file))
         if excel_file is None or excel_file is '':
             self.client_shell.poutput('Specify the name of the Excel file (as stored in the current directory) or the full file path to the Excel file')
@@ -184,11 +61,11 @@ class CastorClient(object):
             self.client_shell.poutput('File path {} does not exist. Please make sure the current directory and Excel file name are correct')
             return
         self.df = pd.read_excel(excel_file, sheet_name='Study results')
-        self.df.columns = df.columns.str.replace(' ', '_')
+        self.df.columns = self.df.columns.str.replace(' ', '_')
         self.dd = pd.read_excel(excel_file, sheet_name='Study variable list')
-        self.dd.columns = df.columns.str.replace(' ', '_')
+        self.dd.columns = self.dd.columns.str.replace(' ', '_')
         self.op = pd.read_excel(excel_file, sheet_name='Field options')
-        self.op.columns = df.columns.str.replace(' ', '_')
+        self.op.columns = self.op.columns.str.replace(' ', '_')
         result_name = 'result_{}'.format(self.next_result_idx())
         self.results[result_name] = [self.df, 'Original']
         pb = ProgressBar(total=len(self.df.columns)-1, prefix='Progress:', suffix='Finished', decimals=0, length=50, fill='#', zfill='-')
@@ -200,17 +77,20 @@ class CastorClient(object):
                 self.df[column] = pd.Series(self.df[column], dtype=data_type)
                 count += 1
                 pb.print_progress_bar(count)
+        self.client_shell.poutput()
         self.client_shell.poutput('Loading done')
 
     def load_excel(self, excel_file):
         self.client_shell.poutput('Loading {}...'.format(excel_file))
         if excel_file is None or excel_file is '':
-            self.client_shell.poutput('Specify the name of the Excel file (as stored in the current directory) or the full file path to the Excel file')
+            self.client_shell.poutput('Specify the name of the Excel file (as stored in the current directory) or the '
+                                      'full file path to the Excel file')
             return
         if not os.path.isfile(excel_file):
             excel_file = os.path.join(self.current_dir, excel_file)
         if not os.path.isfile(excel_file):
-            self.client_shell.poutput('File path {} does not exist. Please make sure the current directory and Excel file name are correct')
+            self.client_shell.poutput('File path {} does not exist. Please make sure the current directory and Excel '
+                                      'file name are correct')
             return
         df = pd.read_excel(excel_file)
         df.columns = df.columns.str.replace(' ', '_')
@@ -360,15 +240,37 @@ class CastorClientShell(cmd2.Cmd):
         self.intro = INTRO
         self.prompt = PROMPT
         self.client = CastorClient(self)
+        self.debug = True
 
     # DOCUMENTATION
 
-    def do_cheat_sheet(self, _):
-        self.poutput(CHEAT_SHEET)
+    def do_info(self, _):
+        """
+        General info
+        ------------
+        The Castor client allows you to analyze Castor export Excel files. To view the full list of commands you
+        can apply, type 'cheat_sheet'.
+
+        Result sets
+        -----------
+        The client works on the basis of result sets. When you first load an export Excel file it will
+        be stored as the first (and current) result set. You can perform a number of operations on a result set
+        like showing its columns (show_columns command) or showing a field's data type (show_field_type <name>
+        command). When you actually change the result set, for example by sorting it, the client tool will create
+        a new result set and set that one to be the current result set. For this reason, make sure you know which
+        result set you are working on. You can view all result sets using the command show_results. It will display
+        each result set's name and a short description. You can change these descriptions to something more memorable
+        using the command: set_result_desc (see help).
+        """
+        pass
 
     # FILE AND DIRECTORY NAVIGATION
 
     def do_cd(self, line):
+        """
+        Usage: cd <dir path>
+        Change the working directory to <dir path>.
+        """
         if line == '.' or line == '':
             self.do_pwd(None)
             return
@@ -385,11 +287,19 @@ class CastorClientShell(cmd2.Cmd):
         self.do_pwd(None)
 
     def do_pwd(self, _):
+        """
+        Print the working (current) directory.
+        """
         self.poutput(self.client.current_dir)
 
     # SYSTEM COMMANDS
 
     def do_shell(self, line):
+        """
+        Usage: !<command>
+        Run a shell command by preceding it with ! (exclamation mark). For example, to view the
+        contents of the $HOME environment variable, type !echo $HOME.
+        """
         if line is None or line is '':
             print('Please specify a shell command preceded by! For example, !echo $HOME')
             return
@@ -400,47 +310,161 @@ class CastorClientShell(cmd2.Cmd):
     # LOADING DATA
 
     def do_load_castor_export(self, excel_file):
-        excel_file = '/Users/Ralph/Desktop/ESPRESSO_v2.0_DPCA_excel_export_20201027104523.xlsx'
+        """
+        Usage: load_castor_export <file path>
+        Load Castor export Excel file. You can either specify a single file name, in which case the file is
+        assumed to be located in the current working directory. Or you can specify the full path to the file.
+
+        Note that the Castor client expects the sheets in the Excel file to have the following names:
+
+            - Study results
+            - Study variable list
+            - Field options
+
+        Also note that when loading the data, spaces in column names will be replaced by underscores so the
+        name 'Variable name' will become 'Variable_name'.
+        """
+        excel_file = '/Users/ralph/Desktop/ESPRESSO_v2.0_DPCA_excel_export_20201102102430.xlsx'
         self.client.load_castor_export(excel_file)
 
     def do_load_excel(self, excel_file):
+        """
+        Usage: load_excel <file path>
+        Load an Excel file. This can be useful if you need some data that you can use as input to one of
+        the analysis commands. For example, you might load a list of hospital IDs from one Excel file and use
+        it to extract specific records from the Castor export Excel file.
+        """
         excel_file = '/Users/Ralph/Desktop/PPPD-Whipple 2009-2019 volledige lijst Marjolein.xlsx'
         self.client.load_excel(excel_file)
 
     # DISPLAYING DATA
 
-    def do_show_columns(self, result_name=''):
+    def do_show_columns(self):
+        """
+        Usage: show_columns
+        Show column names and types for current result set.
+        """
         self.client.show_columns(result_name)
 
     def do_show_column_values(self, col_name):
+        """
+        Usage: show_column_values <col_name>
+        Show all values in the given column <col_name> of the current result set.
+        """
         self.client.show_column_values(col_name)
 
     def do_show_column_options(self, col_name):
+        """
+        Usage: show_column_options <col_name>
+        Show the option items of the given column <col_name> if the column corresponds to an option-type variable.
+        If not, a warning will be shown. Options will be shown for current result set.
+        """
         self.client.show_column_options(col_name)
 
     def do_show_column_field_type(self, col_name):
+        """
+        Usage: show_column_field_type <col_name>
+        Show the column's field type as specified in the Castor CRF. The following field types can be
+        recognized by the Castor client:
+
+            - dropdown
+            - radio
+            - year
+            - string
+            - textarea
+            - calculation
+            - numeric
+            - date
+        """
         self.client.show_column_field_type(col_name)
 
     # RESULT SETS
 
     def do_show_results(self, _):
+        """
+        Usage: show_results
+        Show all result sets. For each result set, its name and description is given. Also the number of rows
+        and columns is displayed so you can see the effect of filtering operations (using the query command)
+        """
         self.client.show_results()
 
     def do_set_current_result(self, result_name):
+        """
+        Usage: set_current_result <result_name>
+        Set <result name> to be the current result set. Any display or analysis commands you run will be applied
+        to the current result set. When you load data for the first time it will automatically become the current
+        result set and will be named 'result_0'.
+        """
         self.client.set_current_result(result_name)
 
     def do_set_result_desc(self, line):
+        """
+        Usage: set_result_desc name=desc
+        Set the description of the result set <name> to <desc>. By default the description of a result set will
+        be empty, except for result_0 which will be 'original dataset'. Query and sort operations, that generate
+        new result sets, will be have descriptions 'query' and 'sort' respectively but you are encouraged to
+        change the description to something more memorable. Note that the description will be included in the
+        file name when you save a result set to file.
+
+        Example:
+
+            set_result_desc result_0=original dataset with other description
+
+        This will set the description of result set 'result_0' to 'original dataset with
+        other description'.
+        """
         self.client.set_result_desc(line)
 
     def do_save_result(self, result_name):
+        """
+        Usage: save_result <result_name>
+        Save the given result set to file. The file name will have the following format:
+
+            <name>_<desc>.xlsx
+
+        where <desc> will be the description with spaces replaced by underscores.
+        """
         self.client.save_result(result_name)
 
     # PROCESSING AND ANALYSIS
 
     def do_query(self, query_string):
+        """
+        Usage: query <query_string>
+        Filter the current result set with the given query string. You can build complex query sentences
+        using the 'and' and 'or' operators. You can specify variable values depending on their type. You
+        should place string values between double-quotes. Numeric values can be typed as is. Date values
+        should be placed between double-quotes as well. The date string format should conform to 'dd-mm-yyyy'.
+        Use == as the *equals* operator (do not use = which means assignment).
+
+        Example query string:
+
+            dob < "01-01-1940" and gender == 1
+
+        This expression searches for records corresponding to patients born before 01-01-1940 and have
+        gender '1' (Male). Note that options are often encoded as numbers, like was done here with gender.
+        You can find out which numbers have been assigned to option values by typing (if you're dataset
+        contains this variable and it is an option group):
+
+            show_options gender
+
+            (0, 'Female')
+            (1, 'Male')
+            (9, 'Unknown')
+
+        This will list the option values for the option group 'dob'. Not only the names of
+        these values will be given (male, female, unknown, etc.) but also their numeric code.
+        """
         self.client.query(query_string)
 
     def do_sort(self, line):
+        """
+        Usage: sort <column names> [--asc=0|1]
+        Sorts current result set based on the given list of columns. By default records are sorted in ascending
+        order (--asc is 1, true or True). Any other value will result in a descending order.
+
+        Columns are specified as comma-separated list.
+        """
         columns = []
         ascending = True
         items = [x.strip() for x in line.split(',')]
@@ -453,12 +477,28 @@ class CastorClientShell(cmd2.Cmd):
             columns.append(x)
         self.client.sort(columns, ascending)
 
-    def do_drop_columns(self, columns):
+    def do_remove_columns(self, columns):
+        """
+        Usage: remove_columns <columns>
+        Remove columns from the current result set. This will now affect the current result set but create a new
+        one where those columns will have been dropped. The new result set will automatically be set to be the
+        current result set.
+
+        Columns are specified as comma-separated list.
+        """
         columns = columns.args
         columns = [x.strip() for x in columns.split(',')]
         self.client.drop_columns(columns)
 
     def do_select_columns(self, columns):
+        """
+        Usage: select_columns <columns>
+        Select the given list of columns from the current result set (thereby discarding the remaining columns).
+        Again, the current result set remains unaffected. A new result set will be created (and set to be the
+        current result set).
+
+        Columns are specified as comma-separated list.
+        """
         columns = columns.args
         columns = [x.strip() for x in columns.split(',')]
         self.client.select_columns(columns)

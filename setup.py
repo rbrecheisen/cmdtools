@@ -10,7 +10,7 @@ with open('README.rst') as readme_file:
 with open('HISTORY.rst') as history_file:
     history = history_file.read()
 
-requirements = ['cmd2', 'gnureadline', 'pydicom', 'numpy']
+requirements = ['cmd2', 'gnureadline', 'pydicom', 'pandas', 'numpy']
 
 setup_requirements = [ ]
 
