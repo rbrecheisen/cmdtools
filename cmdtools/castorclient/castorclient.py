@@ -339,7 +339,6 @@ class CastorClientShell(cmd2.Cmd):
         Also note that when loading the data, spaces in column names will be replaced by underscores so the
         name 'Variable name' will become 'Variable_name'.
         """
-        excel_file = '/Users/ralph/Desktop/ESPRESSO_v2.0_DPCA_excel_export_20201102102430.xlsx'
         self.client.load_castor_export(excel_file)
 
     def do_load_excel(self, excel_file):
@@ -349,7 +348,6 @@ class CastorClientShell(cmd2.Cmd):
         the analysis commands. For example, you might load a list of hospital IDs from one Excel file and use
         it to extract specific records from the Castor export Excel file.
         """
-        excel_file = '/Users/Ralph/Desktop/PPPD-Whipple 2009-2019 volledige lijst Marjolein.xlsx'
         self.client.load_excel(excel_file)
 
     # DISPLAYING DATA
@@ -543,4 +541,8 @@ class CastorClientShell(cmd2.Cmd):
 if __name__ == '__main__':
     import sys
     shell = CastorClientShell()
+    shell.do_load_castor_export('/Users/Ralph/Desktop/ESPRESSO_v2.0_DPCA_excel_export_20201103020001.xlsx')
+    shell.do_load_excel('/Users/Ralph/Desktop/1. pre- en postoperatief functioneren  alvleesklier 2016-2020 - Ralph.xlsx')
+    shell.do_set_current_result('result_1')
+    shell.do_show_columns(None)
     sys.exit(shell.cmdloop())
