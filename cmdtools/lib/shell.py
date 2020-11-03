@@ -70,19 +70,27 @@ class BasicShell(cmd2.Cmd):
         self.result_manager = ResultManager()
         self.current_dir = os.path.abspath(os.path.curdir)
         self.intro = 'Put your intro inside a global variable INTRO'
-        self.cheat_sheet = 'Put your cheat sheet inside a global variable CHEAT_SHEET'
         self.prompt = '(shell) '
 
     def add_result(self, data):
+        """
+        Usage: add_result <data>
+        Add <data> as a new result set to the result manager.
+        """
         self.result_manager.add_result_data(data)
 
     def remove_result(self, name):
+        """
+        Usage: remove_result <result name>
+        Remove result <name> from list of result sets.
+        """
         self.result_manager.remove_result_data(name)
 
-    def do_cheat_sheet(self, _):
-        self.poutput(self.cheat_sheet)
-
     def do_cd(self, line):
+        """
+        Usage: cd <dir path>
+        Change the current directory to <dir path>.
+        """
         if line == '.' or line == '':
             self.do_pwd(None)
             return
@@ -98,30 +106,58 @@ class BasicShell(cmd2.Cmd):
         self.current_dir = line
         self.do_pwd(None)
 
+    def do_ls(self, _):
+        """
+        Usage: ls
+        Lists the contents of the current directory. Same as shell command "!ls -lap".
+        """
+        self.do_shell('cd {}; ls -lap'.format(self.current_dir))
+
     def do_pwd(self, _):
+        """
+        Usage: pwd
+        Show the current directory.
+        """
         self.poutput(self.current_dir)
 
-    def do_ls(self, _):
-        self.do_shell('ls -lap')
-
     def do_shell(self, line):
+        """
+        Usage: !<command>
+        Execute shell command <command>. For example, !echo $HOME will display the user's HOME directory.
+        """
         if line is None or line is '':
-            print('Please specify a shell command preceded by! For example, !echo $HOME')
-            return
-        self.poutput('Running shell command: {}'.format(line))
-        output = os.popen(line).read()
-        self.poutput(output)
+            self.poutput('Please specify a shell command preceded by! For example, !echo $HOME')
+        else:
+            self.poutput('Running shell command: {}'.format(line))
+            output = os.popen(line).read()
+            self.poutput(output)
 
     def do_show_results(self, _):
+        """
+        Usage: show_results
+        Shows all result sets currently available.
+        """
         self.result_manager.show_results()
 
     def do_set_result_desc(self, line):
+        """
+        Usage: set_result_desc <name=description>
+        Set description of result set <name> to <description>.
+        """
         items = [x.strip() for x in line.split('=')]
         name, description = items[0], items[1]
         self.result_manager.set_result_description(name, description)
 
     def do_undo(self, _):
+        """
+        Usage: undo
+        Sets current result set to previous result set.
+        """
         self.result_manager.undo()
 
     def do_redo(self, _):
+        """
+        Usage: redo
+        Sets current result set to next result set.
+        """
         self.result_manager.redo()
