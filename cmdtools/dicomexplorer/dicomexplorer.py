@@ -39,7 +39,7 @@ class DicomExplorerShell(BasicShell):
         self.intro = INTRO
         self.prompt = PROMPT
         self.cheat_sheet = CHEAT_SHEET
-        self.do_load_dir('/Users/ralph/data/RIDER/RIDER-1')
+        # self.do_load_dir('/Users/ralph/data/RIDER/RIDER-1')
 
     def do_load_file(self, file_path):
         if not os.path.isfile(file_path):
