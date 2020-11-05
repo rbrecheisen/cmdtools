@@ -66,9 +66,9 @@ class CastorRESTClientShell(BasicShell):
                     records[record['id']] = record
         return records
 
-    def get_record_field_data(self, record_id, field_id):
+    def get_record_field_data(self, record_id, field):
         study_id = self.selected_study['study_id']
-        url = API_URL + '/study/{}/record/{}/study-data-point/{}'.format(study_id, record_id, field_id)
+        url = API_URL + '/study/{}/record/{}/study-data-point/{}'.format(study_id, record_id, field['id'])
         response = self.session.get(url)
         if response.status_code == 200:
             result = response.json()
@@ -80,11 +80,24 @@ class CastorRESTClientShell(BasicShell):
         record_data = {}
         for key in self.study_fields.keys():
             field = self.study_fields[key]
-            field_data = self.get_record_field_data(record_id, field['id'])
+            field_data = self.get_record_field_data(record_id, field)
             if field_data is not None:
-                self.poutput('{}: {}'.format(field_data['field_variable_name'], field_data['value']))
-                record_data[record_id] = field_data
+                self.poutput('{}: {}'.format(field['field_variable_name'], field_data['value']))
+                record_data[field['field_variable_name']] = field_data
         return record_data
+
+    def show_missing_record_data(self, record_id, verbose=True):
+        missing_fields = []
+        for key in self.study_fields.keys():
+            field = self.study_fields[key]
+            field_data = self.get_record_field_data(record_id, field)
+            if field_data is None:
+                if verbose:
+                    self.poutput('{}'.format(field['field_variable_name']))
+                else:
+                    print('.', end='', flush=True)
+                missing_fields.append(field['field_variable_name'])
+        return missing_fields
 
     # CONNECT
 
@@ -136,20 +149,62 @@ class CastorRESTClientShell(BasicShell):
     # RECORDS
 
     def do_show_records(self, _):
+        """
+        Usage: show_records
+        Show all records in currently selected study.
+        """
         for key in self.study_records.keys():
             value = self.study_records[key]
             self.poutput('{}: {}'.format(key, value))
         self.poutput('Ok')
 
     def do_show_record_data(self, record_id):
+        """
+        Usage: show_record_data <record_id>
+        Show all non-empty field values of given record <record_id>. If fields have never been given a value, these
+        fields will not exist. To see a list of fields that are still empty, use the command show_missing_record_data.
+        """
         self.get_record_data(record_id)
         self.poutput('Ok')
+
+    def do_show_missing_record_data(self, record_id):
+        """
+        Usage: show_missing_record_data <record_id>
+        Show a list of fields in record <record_id> that have never been given a value. These values are missing and
+        can be used to get an idea about which fields still need to be filled.
+        """
+        self.show_missing_record_data(record_id)
+        self.poutput('Ok')
+
+    def do_show_missing_data(self, _):
+        """
+        Usage: show_missing_data
+        For each field defined in the currently selected study show how many records have a missing value for this
+        field. Warning: this command can take a very long time to finish!
+        """
+        nr_records = len(self.study_records)
+        missing_fields = {}
+        for record_id in self.study_records.keys():
+            self.poutput('Processing record {}...'.format(record_id))
+            # A side-effect of the show_missing_record_data method is that it returns a list of names
+            # of fields that are missing in the record
+            fields_names = self.show_missing_record_data(record_id, verbose=False)
+            for _name in fields_names:
+                if _name not in list(missing_fields.keys()):
+                    missing_fields[_name] = 0
+                missing_fields[_name] = missing_fields[_name] + 1
+        for _name in missing_fields.keys():
+            self.poutput('{}: {} / {}'.format(_name, missing_fields[_name], nr_records))
 
     @with_argument_list()
     def do_find_records(self, args):
         self.poutput('Ok')
 
     def do_count_records(self, _):
+        """
+        Usage: count_records
+        Count the number of records in the currently selected study.
+        """
         self.poutput(len(self.study_records))
         self.poutput('Ok')
 
@@ -160,5 +215,7 @@ if __name__ == '__main__':
     shell.do_connect('{} {}'.format(CLIENT_ID, CLIENT_SECRET))
     shell.do_show_studies(None)
     shell.do_select_study('3')
+    # shell.do_show_missing_record_data('T0001')
     # shell.do_show_record_data('T0763')
+    shell.do_show_missing_data(None)
     sys.exit(shell.cmdloop())
