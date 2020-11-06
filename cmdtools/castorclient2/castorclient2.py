@@ -63,6 +63,7 @@ class CastorImportAndUpdateClient(object):
             idx += 1
         return studies
 
+
 class CastorClient(CastorExportClient, CastorImportAndUpdateClient):
 
     def __init__(self):
