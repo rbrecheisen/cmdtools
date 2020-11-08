@@ -1,0 +1,2 @@
+class CastorExportClient(object):
+    pass
