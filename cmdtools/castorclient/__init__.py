@@ -1,1 +1,1 @@
-from cmdtools.castorclient.castorclient import CastorClient
+from .base import CastorClient, CastorCloudInstance

@@ -2,6 +2,6 @@
 
 export PYTHONPATH=${HOME}/dev/cmdtools:${PYTHONPATH}
 
-cd cmdtools/${1}
+cd cmdtools/${1}/test
 
-python ${1}.py
+pytest
