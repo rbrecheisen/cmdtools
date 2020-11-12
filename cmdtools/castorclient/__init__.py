@@ -1,1 +1,1 @@
-from .base import CastorClient, CastorCloudInstance
+from .base import CastorClient
